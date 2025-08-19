@@ -1,0 +1,53 @@
+# Dockerfile.dev - 多阶段构建版本
+FROM python:3.11-slim as base
+
+# 安装系统依赖
+RUN apt-get update && apt-get install -y \
+  build-essential \
+  curl \
+  git \
+  libpq-dev \
+  gcc \
+  g++ \
+  vim \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# 开发阶段
+FROM base as development
+
+# 安装开发工具
+RUN pip install --upgrade pip && \
+  pip install poetry toml debugpy pytest black flake8 mypy
+
+# 复制整个项目
+COPY . .
+
+# 检查项目结构（调试用）
+RUN echo "=== 项目根目录 ===" && ls -la && \
+  echo "=== openbb_platform目录 ===" && ls -la openbb_platform/
+
+# 进入platform目录
+WORKDIR /app/openbb_platform
+
+# 检查是否存在dev_install.py
+RUN ls -la dev_install.py || echo "dev_install.py不存在，将使用其他方法"
+
+# 尝试使用OpenBB的开发安装脚本
+RUN python dev_install.py || \
+  echo "dev_install.py失败，尝试其他安装方法..." && \
+  pip install openbb[all]
+
+# 回到主目录
+WORKDIR /app
+
+# 设置开发环境变量
+ENV PYTHONPATH=/app:/app/openbb_platform
+ENV OPENBB_DEV_MODE=true
+ENV FLASK_ENV=development
+
+EXPOSE 8088 5678
+
+# 启动命令
+CMD ["uvicorn", "openbb_core.api.rest_api:app", "--host", "0.0.0.0", "--port", "8088"]

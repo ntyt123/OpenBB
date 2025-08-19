@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  openbb-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      target: development
+    container_name: openbb-dev
+    ports:
+      - '8080:8080'
+      - '5678:5678' # 调试端口
+    volumes:
+      - .:/app
+      - /app/__pycache__
+      - /app/.git
+    environment:
+      - OPENBB_DEV_MODE=true
+      - OPENBB_DEBUG=true
+      - PYTHONPATH=/app
+      - FLASK_ENV=development
+    env_file:
+      - .env.dev
+    command: ['python', '-m', 'debugpy', '--listen', '0.0.0.0:5678', '--wait-for-client', '-m', 'openbb']
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - openbb-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    networks:
+      - openbb-network
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: openbb_dev
+      POSTGRES_USER: openbb
+      POSTGRES_PASSWORD: dev123
+    ports:
+      - '5432:5432'
+    networks:
+      - openbb-network
+
+networks:
+  openbb-network:
